@@ -1,10 +1,11 @@
 const { app, Menu, Tray, nativeImage } = require('electron')
 const path = require('path')
 
+const { pressKey } = require('bindings')('addon');
+
 app.dock.hide()
 
 let tray
-
 
 app.whenReady().then(() => {
   const image = nativeImage.createFromPath(path.resolve(__dirname, '../res/trayTemplate.png'))
