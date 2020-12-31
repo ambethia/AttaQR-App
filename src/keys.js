@@ -71,3 +71,5 @@ const KEYS = {
   '.': [47, 190],
   '/': [44, 191],
 }
+
+module.exports = { KEYS }

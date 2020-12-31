@@ -65,6 +65,8 @@
     "@electron-forge/maker-rpm": "^6.0.0-beta.54",
     "@electron-forge/maker-squirrel": "^6.0.0-beta.54",
     "@electron-forge/maker-zip": "^6.0.0-beta.54",
-    "electron": "11.1.1"
+    "awesome-qr": "^2.0.0-rc.3",
+    "electron": "11.1.1",
+    "qrcode": "^1.4.4"
   }
 }
