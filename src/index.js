@@ -14,6 +14,7 @@ const { pressKey, captureScreen } = require('bindings')('addon')
 const activeWin = require('active-win')
 const { Machine, assign, interpret } = require('xstate')
 const jsQR = require('jsqr')
+const { getKeyCodeFor } = require('./keys')
 
 const isMacOS = process.platform === 'darwin'
 
@@ -21,9 +22,6 @@ if (isMacOS) app.dock.hide()
 
 const WAIT_INTERVAL = 2800
 const GAME_WINDOW_NAME = 'wow'
-
-// pressKey(1);
-// pressKey(1, ["shift"]);
 
 const machine = Machine(
   {
@@ -160,15 +158,18 @@ function main({ x, y, w, h }) {
       capture.height
     )
     if (result) {
-      handleKeyCode(result.data)
+      handleMessage(result.data)
     } else {
       stateService.send('SUSPEND')
     }
   })
 }
 
-function handleKeyCode(code) {
-  console.log(code)
+function handleMessage(msg) {
+  if (msg !== 'noop') {
+    pressKey(getKeyCodeFor(msg))
+    console.log(msg)
+  }
 }
 
 function checkForScreenAccess() {

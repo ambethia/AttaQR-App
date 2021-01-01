@@ -72,4 +72,10 @@ const KEYS = {
   '/': [44, 191],
 }
 
-module.exports = { KEYS }
+const KEY_INDEX = process.platform === 'darwin' ? 0 : 1
+
+function getKeyCodeFor(key) {
+  return KEYS[key]?.[KEY_INDEX]
+}
+
+module.exports = { KEYS, getKeyCodeFor }
