@@ -2,9 +2,9 @@
 #include "screen.h"
 
 // Capture a given portion of the screen
-CaptureWorker::CaptureWorker(int x, int y, int w, int h, Napi::Function &cb) : Napi::AsyncWorker(cb), x(x), y(y), w(w), h(h)
+CaptureWorker::CaptureWorker(AQRect captureArea, Napi::Function &cb) : Napi::AsyncWorker(cb), captureArea(captureArea)
 {
-  CGRect rect = CGRectMake(x, y, w, h);
+  CGRect rect = CGRectMake(captureArea.origin.x, captureArea.origin.y, captureArea.size.height, captureArea.size.width);
   imageRef = CGDisplayCreateImageForRect(CGMainDisplayID(), rect);
 }
 
