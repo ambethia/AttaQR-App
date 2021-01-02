@@ -195,7 +195,7 @@ function checkForScreenAccess() {
 
 app.whenReady().then(() => {
   const image = nativeImage.createFromPath(
-    path.resolve(__dirname, '../res/trayTemplate.png')
+    path.resolve(__dirname, isMacOS ? '../res/trayTemplate.png' : '../res/icons.icon.ico')
   )
   tray = new Tray(image)
 
