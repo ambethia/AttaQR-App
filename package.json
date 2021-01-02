@@ -11,7 +11,7 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "rebuild": "electron-rebuild -w attaqr",
-    "lint": "echo \"No linting configured\""
+    "icon-gen": "electron-icon-builder -f --input=./res/icon.png --output=./res"
   },
   "author": {
     "name": "Jason L Perry",
@@ -20,7 +20,10 @@
   "license": "MIT",
   "config": {
     "forge": {
-      "packagerConfig": {},
+      "packagerConfig": {
+        "icon": "./res/icons/icon",
+        "name": "AttaQR"
+      },
       "makers": [
         {
           "name": "@electron-forge/maker-squirrel",
@@ -29,18 +32,21 @@
           }
         },
         {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        },
+          "name": "@electron-forge/maker-dmg",
+          "config": {
+            "format": "ULFO"
+          }
+        }
+      ],
+      "publishers": [
         {
-          "name": "@electron-forge/maker-deb",
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-rpm",
-          "config": {}
+          "name": "@electron-forge/publisher-github",
+          "config": {
+            "repository": {
+              "owner": "ambethia",
+              "name": "AttaQR-App"
+            }
+          }
         }
       ]
     }
@@ -62,11 +68,10 @@
   },
   "devDependencies": {
     "@electron-forge/cli": "^6.0.0-beta.54",
-    "@electron-forge/maker-deb": "^6.0.0-beta.54",
-    "@electron-forge/maker-rpm": "^6.0.0-beta.54",
+    "@electron-forge/maker-dmg": "^6.0.0-beta.54",
     "@electron-forge/maker-squirrel": "^6.0.0-beta.54",
-    "@electron-forge/maker-zip": "^6.0.0-beta.54",
     "electron": "11.1.1",
+    "electron-icon-builder": "^2.0.1",
     "qrcode": "^1.4.4"
   }
 }
