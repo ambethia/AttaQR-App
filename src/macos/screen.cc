@@ -48,5 +48,3 @@ void CaptureWorker::OnOK()
   CGImageRelease(imageRef);
   CFRelease(dataRef);
 };
-
-// MacOS: https://github.com/Kuzat/screenshot-node/tree/master/src

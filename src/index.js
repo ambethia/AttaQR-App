@@ -10,7 +10,7 @@ const {
   systemPreferences,
   Tray,
 } = require('electron')
-const { pressKey, captureScreen } = require('bindings')('addon')
+const { pressKey, captureScreen } = require('bindings')('attaqr')
 const activeWin = require('active-win')
 const { Machine, assign, interpret } = require('xstate')
 const jsQR = require('jsqr')
@@ -21,7 +21,9 @@ const isMacOS = process.platform === 'darwin'
 if (isMacOS) app.dock.hide()
 
 const WAIT_INTERVAL = 2800
-const GAME_WINDOW_NAME = 'wow'
+const GAME_WINDOW_NAME = 'Wow'
+
+let running = false // TODO: Move this check to the state machine.
 
 const machine = Machine(
   {
@@ -52,7 +54,7 @@ const machine = Machine(
         // Actively scanning QR Code and sending key presses
         on: { SUSPEND: 'waiting' },
         entry: ['establishScanningRect', 'startMainLoop'],
-        exit: ['clearTimer', 'resetScanningRect'],
+        exit: ['stopMainLoop', 'resetScanningRect'],
       },
     },
     on: {
@@ -72,14 +74,16 @@ const machine = Machine(
       searchForQRCode: assign({
         timer: () => {
           searchForQRCode()
-          return setInterval(() => searchForQRCode(), WAIT_INTERVAL / 2)
+          return setInterval(() => searchForQRCode(), WAIT_INTERVAL / 7)
         },
       }),
-      startMainLoop: assign({
-        timer: (context) => {
-          return setInterval(() => main(context.scanRect), WAIT_INTERVAL / 7)
-        },
-      }),
+      startMainLoop: (context) => {
+        running = true
+        main(context.scanRect)
+      },
+      stopMainLoop: () => {
+        running = false
+      },
       clearTimer: assign({
         timer: (context) => clearInterval(context.timer),
       }),
@@ -103,7 +107,7 @@ let tray
 
 async function isGameInForeground() {
   const activeApplicationName = (await activeWin())?.owner?.name
-  return activeApplicationName?.toLocaleLowerCase() === GAME_WINDOW_NAME
+  return activeApplicationName?.startsWith(GAME_WINDOW_NAME)
 }
 
 async function activateOnGame() {
@@ -124,12 +128,13 @@ async function searchForQRCode() {
       capture.bytesPerRow / capture.bytesPerPixel,
       capture.height
     )
+    
     if (result) {
-      new Notification({
-        title: 'AttaQR is ready.',
-        body: "QR code located; we're ready to rock and roll.",
-        silent: true,
-      }).show()
+      // new Notification({
+      //   title: 'AttaQR is ready.',
+      //   body: "QR code located; we're ready to rock and roll.",
+      //   silent: true,
+      // }).show()
 
       const display = screen.getDisplayNearestPoint(
         screen.getCursorScreenPoint()
@@ -148,10 +153,11 @@ async function searchForQRCode() {
       })
     }
   })
-}
+}``
 
-function main({ x, y, w, h }) {
-  captureScreen(x, y, w, h, (capture) => {
+function main(rect) {
+  // console.time('main')
+  captureScreen(rect.x, rect.y, rect.w, rect.h, (capture) => {
     const result = jsQR(
       capture.data,
       capture.bytesPerRow / capture.bytesPerPixel,
@@ -162,13 +168,16 @@ function main({ x, y, w, h }) {
     } else {
       stateService.send('SUSPEND')
     }
+    if (running){
+      setImmediate(() => main(rect))
+    }
+    // console.timeEnd('main')
   })
 }
 
 function handleMessage(msg) {
   if (msg !== 'noop') {
     pressKey(getKeyCodeFor(msg))
-    console.log(msg)
   }
 }
 
