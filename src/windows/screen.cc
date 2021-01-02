@@ -15,10 +15,9 @@ CaptureWorker::CaptureWorker(AQRect rect, Napi::Function &cb) : Napi::AsyncWorke
 CaptureWorker::CaptureWorker(Napi::Function &cb) : Napi::AsyncWorker(cb)
 {
   captureArea = AQMakeRect(
-    0, 0,
-    GetSystemMetrics(SM_CYSCREEN),
-    GetSystemMetrics(SM_CXSCREEN)
-  );
+      0, 0,
+      GetSystemMetrics(SM_CYSCREEN),
+      GetSystemMetrics(SM_CXSCREEN));
   width = captureArea.size.width;
   height = captureArea.size.height;
 }
@@ -28,9 +27,9 @@ void CaptureWorker::Execute()
   HDC screen = GetDC(NULL);
   HDC target = CreateCompatibleDC(screen);
   HBITMAP bitmap = CreateCompatibleBitmap(screen, width, height);
-  
+
   DeleteObject(SelectObject(target, bitmap));
-  BitBlt(target, 0,0, width, height, screen, captureArea.origin.x, captureArea.origin.y, SRCCOPY);
+  BitBlt(target, 0, 0, width, height, screen, captureArea.origin.x, captureArea.origin.y, SRCCOPY);
 
   BITMAPINFOHEADER info = {0};
   info.biSize = sizeof(BITMAPINFOHEADER);
@@ -44,7 +43,7 @@ void CaptureWorker::Execute()
   bytesPerRow = bytesPerPixel * width;
   buffer = new uint8_t[bytesPerRow * height];
 
-  GetDIBits(target, bitmap, 0, height, buffer, (BITMAPINFO*)&info, DIB_RGB_COLORS);
+  GetDIBits(target, bitmap, 0, height, buffer, (BITMAPINFO *)&info, DIB_RGB_COLORS);
 
   ReleaseDC(NULL, screen);
   DeleteObject(bitmap);

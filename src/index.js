@@ -128,7 +128,7 @@ async function searchForQRCode() {
       capture.bytesPerRow / capture.bytesPerPixel,
       capture.height
     )
-    
+
     if (result) {
       // new Notification({
       //   title: 'AttaQR is ready.',
@@ -153,11 +153,11 @@ async function searchForQRCode() {
       })
     }
   })
-}``
+}
 
 function main(rect) {
   // console.time('main')
-  captureScreen(rect.x, rect.y, rect.w, rect.h, (capture) => {
+  captureScreen(rect.x, rect.y, rect.h, rect.w, (capture) => {
     const result = jsQR(
       capture.data,
       capture.bytesPerRow / capture.bytesPerPixel,
@@ -168,7 +168,7 @@ function main(rect) {
     } else {
       stateService.send('SUSPEND')
     }
-    if (running){
+    if (running) {
       setImmediate(() => main(rect))
     }
     // console.timeEnd('main')

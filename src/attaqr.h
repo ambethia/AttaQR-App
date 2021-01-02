@@ -10,21 +10,24 @@
 #define IS_WINDOWS
 #endif
 
-typedef struct _AQPoint {
+typedef struct _AQPoint
+{
   size_t x;
   size_t y;
 } AQPoint;
 
 AQPoint AQMakePoint(size_t x, size_t y);
 
-typedef struct _AQSize {
+typedef struct _AQSize
+{
   size_t height;
   size_t width;
 } AQSize;
 
 AQSize AQMakeSize(size_t height, size_t width);
 
-typedef struct _AQRect {
+typedef struct _AQRect
+{
   AQPoint origin;
   AQSize size;
 } AQRect;

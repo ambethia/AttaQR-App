@@ -15,7 +15,6 @@ static const int MOD_SHIFT = kCGEventFlagMaskShift;
 
 static const int MOD_NONE = 0;
 
-
 void pressKey(int key, int flags);
 
 #endif // KEYBOARD_H

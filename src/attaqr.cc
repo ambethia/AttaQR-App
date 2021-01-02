@@ -38,11 +38,10 @@ void _captureScreen(const Napi::CallbackInfo &info)
   else
   {
     AQRect rect = AQMakeRect(
-      (uint32_t)info[0].As<Napi::Number>(),
-      (uint32_t)info[1].As<Napi::Number>(),
-      (uint32_t)info[2].As<Napi::Number>(),
-      (uint32_t)info[3].As<Napi::Number>()
-    );
+        (uint32_t)info[0].As<Napi::Number>(),
+        (uint32_t)info[1].As<Napi::Number>(),
+        (uint32_t)info[2].As<Napi::Number>(),
+        (uint32_t)info[3].As<Napi::Number>());
     Napi::Function cb = info[4].As<Napi::Function>();
     worker = new CaptureWorker(rect, cb);
   }
