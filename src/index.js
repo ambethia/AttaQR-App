@@ -24,6 +24,8 @@ const WAIT_INTERVAL = 2800
 const GAME_WINDOW_NAME = 'Wow'
 
 let running = false // TODO: Move this check to the state machine.
+let lastMsg = null
+let lastMsgAt = Date.now()
 
 const machine = Machine(
   {
@@ -122,61 +124,73 @@ async function searchForQRCode() {
     return
   }
 
-  captureScreen((capture) => {
-    const result = jsQR(
-      capture.data,
-      capture.bytesPerRow / capture.bytesPerPixel,
-      capture.height
-    )
-
-    if (result) {
-      // new Notification({
-      //   title: 'AttaQR is ready.',
-      //   body: "QR code located; we're ready to rock and roll.",
-      //   silent: true,
-      // }).show()
-
-      const display = screen.getDisplayNearestPoint(
-        screen.getCursorScreenPoint()
+  try {
+    captureScreen((capture) => {
+      const result = jsQR(
+        capture.data,
+        capture.bytesPerRow / capture.bytesPerPixel,
+        capture.height
       )
-      const factor = display.scaleFactor
-      const margin = 4
-      const loc = result.location
-      const x = loc.topLeftCorner.x / factor - margin
-      const y = loc.topLeftCorner.y / factor - margin
-      const h = loc.bottomLeftCorner.y / factor - y + margin * 2
-      const w = loc.topRightCorner.x / factor - x + margin * 2
 
-      stateService.send({
-        type: 'ACTIVATE',
-        payload: { x, y, h, w },
-      })
-    }
-  })
+      if (result) {
+        // new Notification({
+        //   title: 'AttaQR is ready.',
+        //   body: "QR code located; we're ready to rock and roll.",
+        //   silent: true,
+        // }).show()
+
+        const display = screen.getDisplayNearestPoint(
+          screen.getCursorScreenPoint()
+        )
+        const factor = display.scaleFactor
+        const margin = 4
+        const loc = result.location
+        const x = loc.topLeftCorner.x / factor - margin
+        const y = loc.topLeftCorner.y / factor - margin
+        const h = loc.bottomLeftCorner.y / factor - y + margin * 2
+        const w = loc.topRightCorner.x / factor - x + margin * 2
+
+        stateService.send({
+          type: 'ACTIVATE',
+          payload: { x, y, h, w },
+        })
+      }
+    })
+  } catch {
+    stateService.send('SUSPEND')
+  }
 }
 
 function main(rect) {
-  // console.time('main')
-  captureScreen(rect.x, rect.y, rect.h, rect.w, (capture) => {
-    const result = jsQR(
-      capture.data,
-      capture.bytesPerRow / capture.bytesPerPixel,
-      capture.height
-    )
-    if (result) {
-      handleMessage(result.data)
-    } else {
-      stateService.send('SUSPEND')
-    }
-    if (running) {
-      setImmediate(() => main(rect))
-    }
-    // console.timeEnd('main')
-  })
+  try {
+    // console.time('main')
+    captureScreen(rect.x, rect.y, rect.h, rect.w, (capture) => {
+      const result = jsQR(
+        capture.data,
+        capture.bytesPerRow / capture.bytesPerPixel,
+        capture.height
+      )
+      if (result) {
+        handleMessage(result.data)
+      } else {
+        stateService.send('SUSPEND')
+      }
+      if (running) {
+        setImmediate(() => main(rect))
+      }
+      // console.timeEnd('main')
+    })
+  } catch {
+    stateService.send('SUSPEND')
+  }
 }
 
 function handleMessage(msg) {
   if (msg !== 'noop') {
+    const now = Date.now()
+    if (msg === lastMsg && now - lastMsgAt < 1000) return
+    lastMsgAt = now
+    lastMsg = msg
     pressKey(getKeyCodeFor(msg))
   }
 }
