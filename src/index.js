@@ -24,6 +24,8 @@ const WAIT_INTERVAL = 2800
 const GAME_WINDOW_NAME = 'Wow'
 
 let running = false // TODO: Move this check to the state machine.
+let lastMsg = null
+let lastMsgAt = Date.now()
 
 const machine = Machine(
   {
@@ -177,6 +179,10 @@ function main(rect) {
 
 function handleMessage(msg) {
   if (msg !== 'noop') {
+    const now = Date.now()
+    if (msg === lastMsg && now - lastMsgAt < 1000) return
+    lastMsgAt = now
+    lastMsg = msg
     pressKey(getKeyCodeFor(msg))
   }
 }
