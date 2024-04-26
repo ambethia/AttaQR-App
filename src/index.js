@@ -2,6 +2,7 @@ const path = require('path')
 const fs = require('fs')
 const {
   app,
+  desktopCapturer,
   Menu,
   nativeImage,
   Notification,
@@ -10,9 +11,9 @@ const {
   systemPreferences,
   Tray,
 } = require('electron')
-const { pressKey, captureScreen } = require('bindings')('attaqr')
-const activeWin = require('active-win')
-const { Machine, assign, interpret } = require('xstate')
+const { pressKey } = require('bindings')('attaqr')
+const activeWindows = require('electron-active-window')
+const { createActor, setup, assign } = require('xstate')
 const jsQR = require('jsqr')
 const { getKeyCodeFor } = require('./keys')
 
@@ -27,165 +28,134 @@ let running = false // TODO: Move this check to the state machine.
 let lastMsg = null
 let lastMsgAt = Date.now()
 
-const machine = Machine(
-  {
-    id: 'attaq',
-    initial: 'idle',
-    context: {
-      timer: null,
-      scanRect: null,
+const machine = setup({
+  actions: {
+    activateIfGameIsRunning: assign({
+      timer: () => {
+        activateOnGame()
+        return setInterval(() => activateOnGame(), WAIT_INTERVAL)
+      },
+    }),
+    searchForQRCode: assign({
+      timer: () => {
+        searchForQRCode()
+        return setInterval(() => searchForQRCode(), WAIT_INTERVAL / 7)
+      },
+    }),
+    startMainLoop: (context) => {
+      running = true
+      main()
     },
-    states: {
-      idle: {
-        // Doing nothing
-        on: { START: 'waiting' },
-      },
-      waiting: {
-        // Periodically checking for game to be active.
-        on: { ACTIVATE: 'pending' },
-        entry: ['activateIfGameIsRunning'],
-        exit: ['clearTimer'],
-      },
-      pending: {
-        // Game is running, waiting for QR
-        on: { ACTIVATE: 'active', SUSPEND: 'waiting' },
-        entry: ['searchForQRCode'],
-        exit: ['clearTimer'],
-      },
-      active: {
-        // Actively scanning QR Code and sending key presses
-        on: { SUSPEND: 'waiting' },
-        entry: ['establishScanningRect', 'startMainLoop'],
-        exit: ['stopMainLoop', 'resetScanningRect'],
-      },
+    stopMainLoop: () => {
+      running = false
     },
-    on: {
-      STOP: {
-        target: 'idle',
-      },
+    clearTimer: assign({
+      timer: (context) => clearInterval(context.timer),
+    })
+  },
+  on: {
+    STOP: {
+      target: 'idle',
     },
   },
-  {
-    actions: {
-      activateIfGameIsRunning: assign({
-        timer: () => {
-          activateOnGame()
-          return setInterval(() => activateOnGame(), WAIT_INTERVAL)
-        },
-      }),
-      searchForQRCode: assign({
-        timer: () => {
-          searchForQRCode()
-          return setInterval(() => searchForQRCode(), WAIT_INTERVAL / 7)
-        },
-      }),
-      startMainLoop: (context) => {
-        running = true
-        main(context.scanRect)
-      },
-      stopMainLoop: () => {
-        running = false
-      },
-      clearTimer: assign({
-        timer: (context) => clearInterval(context.timer),
-      }),
-      establishScanningRect: assign({
-        scanRect: (_, event) => {
-          return event.payload
-        },
-      }),
-      resetScanningRect: assign({
-        scanRect: () => null,
-      }),
+}).createMachine({
+  id: 'attaq',
+  initial: 'idle',
+  context: { timer: null },
+  states: {
+    idle: {
+      // Doing nothing
+      on: { START: { target: 'waiting' } },
     },
-  }
-)
+    waiting: {
+      // Periodically checking for game to be active.
+      on: { ACTIVATE: { target: 'pending' } },
+      entry: ['activateIfGameIsRunning'],
+      exit: ['clearTimer'],
+    },
+    pending: {
+      // Game is running, waiting for QR
+      on: { ACTIVATE: { target: 'active' }, SUSPEND: { target: 'waiting' } },
+      entry: ['searchForQRCode'],
+      exit: ['clearTimer'],
+    },
+    active: {
+      // Actively scanning QR Code and sending key presses
+      on: { SUSPEND: { target: 'waiting' } },
+      entry: ['startMainLoop'],
+      exit: ['stopMainLoop'],
+    },
+  },
+})
 
-const stateService = interpret(machine)
-  // .onTransition((state) => console.log('Transitioning to', state.value))
-  .start()
+const stateService = createActor(machine)
+stateService.start()
 
 let tray
 
 async function isGameInForeground() {
-  const activeApplicationName = (await activeWin())?.owner?.name
-  return activeApplicationName?.startsWith(GAME_WINDOW_NAME)
+  w = await activeWindows().getActiveWindow()
+  return w?.windowName === GAME_WINDOW_NAME
 }
 
 async function activateOnGame() {
   const isActive = await isGameInForeground()
-  if (isActive) stateService.send('ACTIVATE')
+  if (isActive) stateService.send({ type: 'ACTIVATE' })
 }
 
 async function searchForQRCode() {
   const isActive = await isGameInForeground()
   if (!isActive) {
-    stateService.send('SUSPEND')
+    stateService.send({ type: 'SUSPEND' })
     return
   }
 
   try {
     captureScreen((capture) => {
-      const result = jsQR(
-        capture.data,
-        capture.bytesPerRow / capture.bytesPerPixel,
-        capture.height
-      )
-
+      const result = jsQR(capture.data, capture.width, capture.height)
       if (result) {
-        // new Notification({
-        //   title: 'AttaQR is ready.',
-        //   body: "QR code located; we're ready to rock and roll.",
-        //   silent: true,
-        // }).show()
-
-        const display = screen.getDisplayNearestPoint(
-          screen.getCursorScreenPoint()
-        )
-        const factor = display.scaleFactor
-        const margin = 4
-        const loc = result.location
-        const x = loc.topLeftCorner.x / factor - margin
-        const y = loc.topLeftCorner.y / factor - margin
-        const h = loc.bottomLeftCorner.y / factor - y + margin * 2
-        const w = loc.topRightCorner.x / factor - x + margin * 2
-
-        stateService.send({
-          type: 'ACTIVATE',
-          payload: { x, y, h, w },
-        })
+        stateService.send({ type: 'ACTIVATE' })
       }
     })
   } catch {
-    stateService.send('SUSPEND')
+    stateService.send({ type: 'SUSPEND' })
   }
 }
 
-function main(rect) {
+function main() {
   try {
-    // console.time('main')
-    captureScreen(rect.x, rect.y, rect.h, rect.w, (capture) => {
-      const result = jsQR(
-        capture.data,
-        capture.bytesPerRow / capture.bytesPerPixel,
-        capture.height
-      )
+    captureScreen((capture) => {
+      const result = jsQR(capture.data, capture.width, capture.height)
       if (result) {
         handleMessage(result.data)
       } else {
-        stateService.send('SUSPEND')
+        stateService.send({ type: 'SUSPEND' })
       }
       if (running) {
-        setImmediate(() => main(rect))
+        setImmediate(() => main())
       }
-      // console.timeEnd('main')
     })
   } catch {
-    stateService.send('SUSPEND')
+    stateService.send({ type: 'SUSPEND' })
   }
 }
 
+function captureScreen(callback) {
+  const display = screen.getPrimaryDisplay() // TODO: Get the display where the game is running.
+  desktopCapturer
+    .getSources({ types: ['window', 'screen'], thumbnailSize: display.size })
+    .then(async (sources) => {
+      for (const source of sources) {
+        if (source.name === 'World of Warcraft') {
+          const size = source.thumbnail.getSize()
+          callback({ data: source.thumbnail.getBitmap(), ...size })
+        }
+      }
+    })
+}
+
 function handleMessage(msg) {
+  console.log(msg)
   if (msg !== 'noop') {
     const now = Date.now()
     if (msg === lastMsg && now - lastMsgAt < 1000) return
@@ -209,7 +179,10 @@ function checkForScreenAccess() {
 
 app.whenReady().then(() => {
   const image = nativeImage.createFromPath(
-    path.resolve(__dirname, isMacOS ? '../res/trayTemplate.png' : '../res/icon.png')
+    path.resolve(
+      __dirname,
+      isMacOS ? '../res/trayTemplate.png' : '../res/icon.png'
+    )
   )
   tray = new Tray(image)
 
@@ -217,7 +190,7 @@ app.whenReady().then(() => {
     {
       label: 'Quit',
       click: () => {
-        stateService.send('STOP')
+        stateService.send({ type: 'STOP' })
         app.isQuiting = true
         app.quit()
       },
@@ -227,14 +200,14 @@ app.whenReady().then(() => {
   tray.setContextMenu(contextMenu)
 
   powerMonitor.on('suspend', () => {
-    stateService.send('STOP')
+    stateService.send({ type: 'STOP' })
   })
 
   powerMonitor.on('resume', () => {
-    stateService.send('START')
+    stateService.send({ type: 'START' })
   })
 
-  stateService.send('START')
+  stateService.send({ type: 'START' })
 
   if (isMacOS) {
     checkForScreenAccess()
@@ -242,6 +215,6 @@ app.whenReady().then(() => {
 })
 
 if (require('electron-squirrel-startup')) {
-  stateService.send('STOP')
+  stateService.send({ type: 'STOP' })
   app.quit()
 }
