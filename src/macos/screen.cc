@@ -17,24 +17,22 @@ CaptureWorker::CaptureWorker(Napi::Function &cb) : Napi::AsyncWorker(cb)
 void CaptureWorker::Execute()
 {
   dataRef = CGDataProviderCopyData(CGImageGetDataProvider(imageRef));
-  width = CGImageGetWidth(imageRef);
+  // width = CGImageGetWidth(imageRef);
   height = CGImageGetHeight(imageRef);
   length = CFDataGetLength(dataRef);
   bytesPerRow = CGImageGetBytesPerRow(imageRef);
   bytesPerPixel = CGImageGetBitsPerPixel(imageRef) / 8;
+  width = bytesPerRow / bytesPerPixel;
   buffer = new uint8_t[length];
   CFDataGetBytes(dataRef, CFRangeMake(0, CFDataGetLength(dataRef)), buffer);
 };
 
 void CaptureWorker::OnOK()
 {
-  Napi::Buffer<uint8_t> data = Napi::Buffer<uint8_t>::New(
+  Napi::Buffer<uint8_t> data = Napi::Buffer<uint8_t>::NewOrCopy(
       Env(),
       buffer,
-      length,
-      [](Napi::Env /*env*/, void *finalizeData) {
-        delete[] static_cast<uint8_t *>(finalizeData);
-      });
+      length);
 
   Napi::Object imageData = Napi::Object::New(Env());
   imageData.Set("width", Napi::Number::New(Env(), width));

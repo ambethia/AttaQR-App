@@ -11,11 +11,17 @@ const {
   systemPreferences,
   Tray,
 } = require('electron')
-const { pressKey } = require('bindings')('attaqr')
+const { pressKey, captureScreen } = require('bindings')('attaqr')
 const activeWindows = require('electron-active-window')
 const { createActor, setup, assign } = require('xstate')
-const jsQR = require('jsqr')
 const { getKeyCodeFor } = require('./keys')
+
+let readQR, Bitmap
+;(async () => {
+  readQR = (await import('@paulmillr/qr/decode.js')).default
+  Bitmap = (await import('@paulmillr/qr')).Bitmap
+  stateService.start()
+})()
 
 const isMacOS = process.platform === 'darwin'
 
@@ -42,16 +48,24 @@ const machine = setup({
         return setInterval(() => searchForQRCode(), WAIT_INTERVAL / 7)
       },
     }),
-    startMainLoop: (context) => {
+    startMainLoop: ({ context }) => {
       running = true
-      main()
+      main(context.scanRect)
     },
     stopMainLoop: () => {
       running = false
     },
     clearTimer: assign({
       timer: (context) => clearInterval(context.timer),
-    })
+    }),
+    establishScanningRect: assign({
+      scanRect: ({ event }) => {
+        return event.payload
+      },
+    }),
+    resetScanningRect: assign({
+      scanRect: () => null,
+    }),
   },
   on: {
     STOP: {
@@ -61,7 +75,7 @@ const machine = setup({
 }).createMachine({
   id: 'attaq',
   initial: 'idle',
-  context: { timer: null },
+  context: { timer: null, scanRect: null },
   states: {
     idle: {
       // Doing nothing
@@ -82,14 +96,14 @@ const machine = setup({
     active: {
       // Actively scanning QR Code and sending key presses
       on: { SUSPEND: { target: 'waiting' } },
-      entry: ['startMainLoop'],
-      exit: ['stopMainLoop'],
+      entry: ['establishScanningRect', 'startMainLoop'],
+      exit: ['stopMainLoop', 'resetScanningRect'],
     },
   },
 })
 
 const stateService = createActor(machine)
-stateService.start()
+// stateService.subscribe((state) => console.log(state.value))
 
 let tray
 
@@ -112,9 +126,34 @@ async function searchForQRCode() {
 
   try {
     captureScreen((capture) => {
-      const result = jsQR(capture.data, capture.width, capture.height)
+      let result, scanRect
+      try {
+        result = readQR(capture, {
+          detectFn: (points) => {
+            const display = screen.getDisplayNearestPoint(
+              screen.getCursorScreenPoint()
+            )
+            const m = 32
+            const f = display.scaleFactor
+            const x = Math.max(points[0].x - m, 0)
+            const y = Math.max(points[0].y - m, 0)
+            const w = points[1].x + m - x
+            const h = points[3].y + m - y
+
+            scanRect = {
+              x: Math.floor(x / f),
+              y: Math.floor(y / f),
+              w: Math.ceil(w / f),
+              h: Math.ceil(h / f),
+            }
+          },
+        })
+      } catch (error) {}
       if (result) {
-        stateService.send({ type: 'ACTIVATE' })
+        stateService.send({
+          type: 'ACTIVATE',
+          payload: scanRect,
+        })
       }
     })
   } catch {
@@ -122,17 +161,21 @@ async function searchForQRCode() {
   }
 }
 
-function main() {
+function main(rect) {
   try {
-    captureScreen((capture) => {
-      const result = jsQR(capture.data, capture.width, capture.height)
+    captureScreen(rect.x, rect.y, rect.h, rect.w, (capture) => {
+      let result
+      try {
+        result = readQR(capture)
+      } catch (error) {}
+
       if (result) {
-        handleMessage(result.data)
+        handleMessage(result)
       } else {
         stateService.send({ type: 'SUSPEND' })
       }
       if (running) {
-        setImmediate(() => main())
+        setImmediate(() => main(rect))
       }
     })
   } catch {
@@ -140,24 +183,9 @@ function main() {
   }
 }
 
-function captureScreen(callback) {
-  const display = screen.getPrimaryDisplay() // TODO: Get the display where the game is running.
-  desktopCapturer
-    .getSources({ types: ['window', 'screen'], thumbnailSize: display.size })
-    .then(async (sources) => {
-      for (const source of sources) {
-        if (source.name === 'World of Warcraft') {
-          const size = source.thumbnail.getSize()
-          callback({ data: source.thumbnail.getBitmap(), ...size })
-        }
-      }
-    })
-}
-
 function handleMessage(msg) {
-  console.log(msg)
-  if (msg !== 'noop') {
-    const now = Date.now()
+  if (msg && msg !== 'noop') {
+    const now = performance.now()
     if (msg === lastMsg && now - lastMsgAt < 1000) return
     lastMsgAt = now
     lastMsg = msg
