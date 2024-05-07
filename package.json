@@ -64,6 +64,7 @@
     "electron-active-window": "^0.0.6",
     "electron-squirrel-startup": "^1.0.0",
     "node-addon-api": "^8.0.0",
+    "node-screenshots": "^0.2.0",
     "xstate": "^5.12.0"
   },
   "devDependencies": {

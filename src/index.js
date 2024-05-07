@@ -2,7 +2,6 @@ const path = require('path')
 const fs = require('fs')
 const {
   app,
-  desktopCapturer,
   Menu,
   nativeImage,
   Notification,
@@ -11,10 +10,11 @@ const {
   systemPreferences,
   Tray,
 } = require('electron')
-const { pressKey, captureScreen } = require('bindings')('attaqr')
+const { pressKey } = require('bindings')('attaqr')
 const activeWindows = require('electron-active-window')
 const { createActor, setup, assign } = require('xstate')
 const { getKeyCodeFor } = require('./keys')
+const { Window } = require('node-screenshots')
 
 let readQR, Bitmap
 ;(async () => {
@@ -125,62 +125,66 @@ async function searchForQRCode() {
   }
 
   try {
-    captureScreen((capture) => {
-      let result, scanRect
-      try {
-        result = readQR(capture, {
-          detectFn: (points) => {
-            const display = screen.getDisplayNearestPoint(
-              screen.getCursorScreenPoint()
-            )
-            const m = 32
-            const f = display.scaleFactor
-            const x = Math.max(points[0].x - m, 0)
-            const y = Math.max(points[0].y - m, 0)
-            const w = points[1].x + m - x
-            const h = points[3].y + m - y
+    const capture = await captureScreen()
+    let result, scanRect
+    try {
+      result = readQR(capture, {
+        detectFn: (points) => {
+          const display = screen.getDisplayNearestPoint(
+            screen.getCursorScreenPoint()
+          )
+          const m = 32
+          const f = display.scaleFactor
+          const x = Math.max(points[0].x - m, 0)
+          const y = Math.max(points[0].y - m, 0)
+          const w = points[1].x + m - x
+          const h = points[3].y + m - y
 
-            scanRect = {
-              x: Math.floor(x / f),
-              y: Math.floor(y / f),
-              w: Math.ceil(w / f),
-              h: Math.ceil(h / f),
-            }
-          },
-        })
-      } catch (error) {}
-      if (result) {
-        stateService.send({
-          type: 'ACTIVATE',
-          payload: scanRect,
-        })
-      }
-    })
-  } catch {
+          scanRect = {
+            x: Math.floor(x / f),
+            y: Math.floor(y / f),
+            w: Math.ceil(w / f),
+            h: Math.ceil(h / f),
+          }
+        },
+      })
+    } catch (error) {
+      console.error(error)
+    }
+    if (result) {
+      stateService.send({
+        type: 'ACTIVATE',
+        payload: scanRect,
+      })
+    }
+  } catch (error) {
+    console.error(error)
     stateService.send({ type: 'SUSPEND' })
   }
 }
 
-function main(rect) {
+async function main(rect) {
+  // const now = performance.now()
   try {
-    captureScreen(rect.x, rect.y, rect.h, rect.w, (capture) => {
-      let result
-      try {
-        result = readQR(capture)
-      } catch (error) {}
+    const capture = await captureScreen(rect)
+    let result
+    try {
+      result = readQR(capture)
+    } catch (error) {}
 
-      if (result) {
-        handleMessage(result)
-      } else {
-        stateService.send({ type: 'SUSPEND' })
-      }
-      if (running) {
-        setImmediate(() => main(rect))
-      }
-    })
+    if (result) {
+      handleMessage(result)
+    } else {
+      stateService.send({ type: 'SUSPEND' })
+    }
+    if (running) {
+      setImmediate(async () => await main(rect))
+    }
   } catch {
     stateService.send({ type: 'SUSPEND' })
   }
+  // const elapsed = performance.now() - now
+  // console.log('Elapsed:', elapsed)
 }
 
 function handleMessage(msg) {
@@ -245,4 +249,32 @@ app.whenReady().then(() => {
 if (require('electron-squirrel-startup')) {
   stateService.send({ type: 'STOP' })
   app.quit()
+}
+
+// TODO refactor pending loop to just look at this instead of activeWindows
+async function captureScreen(rect = null) {
+  const windows = Window.all()
+  const window = windows.find((w) => w.title === 'World of Warcraft')
+  let image = await window.captureImage()
+
+  if (rect) {
+    const scaleFactor = window.currentMonitor.scaleFactor
+    const cropped = await image.crop(
+      rect.x * scaleFactor,
+      rect.y * scaleFactor,
+      rect.w * scaleFactor,
+      rect.h * scaleFactor
+    )
+    return {
+      width: rect.w * scaleFactor,
+      height: rect.h * scaleFactor,
+      data: await cropped.toRaw(true),
+    }
+  } else {
+    return {
+      width: image.width,
+      height: image.height,
+      data: await image.toRaw(true),
+    }
+  }
 }
