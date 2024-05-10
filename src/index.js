@@ -11,8 +11,6 @@ const {
   Tray,
 } = require('electron')
 const { pressKey } = require('bindings')('attaqr')
-const activeWindows = require('electron-active-window')
-const { createActor, setup, assign } = require('xstate')
 const { getKeyCodeFor } = require('./keys')
 const { Window } = require('node-screenshots')
 
@@ -20,177 +18,106 @@ let readQR, Bitmap
 ;(async () => {
   readQR = (await import('@paulmillr/qr/decode.js')).default
   Bitmap = (await import('@paulmillr/qr')).Bitmap
-  stateService.start()
 })()
+
+const DEBUG_LEVEL = null
+// const DEBUG_LEVEL = 'info'
+// const DEBUG_LEVEL = 'debug'
+
+const isPaused = false
+
+const IDLE_INTERVAL = 2500
+const MAIN_INTERVAL = 500
+const REPEAT_DELAY = 1000
 
 const isMacOS = process.platform === 'darwin'
 
 if (isMacOS) app.dock.hide()
 
-const WAIT_INTERVAL = 2800
-const GAME_WINDOW_NAME = 'Wow'
-
-let running = false // TODO: Move this check to the state machine.
 let lastMsg = null
 let lastMsgAt = Date.now()
-
-const machine = setup({
-  actions: {
-    activateIfGameIsRunning: assign({
-      timer: () => {
-        activateOnGame()
-        return setInterval(() => activateOnGame(), WAIT_INTERVAL)
-      },
-    }),
-    searchForQRCode: assign({
-      timer: () => {
-        searchForQRCode()
-        return setInterval(() => searchForQRCode(), WAIT_INTERVAL / 7)
-      },
-    }),
-    startMainLoop: ({ context }) => {
-      running = true
-      main(context.scanRect)
-    },
-    stopMainLoop: () => {
-      running = false
-    },
-    clearTimer: assign({
-      timer: (context) => clearInterval(context.timer),
-    }),
-    establishScanningRect: assign({
-      scanRect: ({ event }) => {
-        return event.payload
-      },
-    }),
-    resetScanningRect: assign({
-      scanRect: () => null,
-    }),
-  },
-  on: {
-    STOP: {
-      target: 'idle',
-    },
-  },
-}).createMachine({
-  id: 'attaq',
-  initial: 'idle',
-  context: { timer: null, scanRect: null },
-  states: {
-    idle: {
-      // Doing nothing
-      on: { START: { target: 'waiting' } },
-    },
-    waiting: {
-      // Periodically checking for game to be active.
-      on: { ACTIVATE: { target: 'pending' } },
-      entry: ['activateIfGameIsRunning'],
-      exit: ['clearTimer'],
-    },
-    pending: {
-      // Game is running, waiting for QR
-      on: { ACTIVATE: { target: 'active' }, SUSPEND: { target: 'waiting' } },
-      entry: ['searchForQRCode'],
-      exit: ['clearTimer'],
-    },
-    active: {
-      // Actively scanning QR Code and sending key presses
-      on: { SUSPEND: { target: 'waiting' } },
-      entry: ['establishScanningRect', 'startMainLoop'],
-      exit: ['stopMainLoop', 'resetScanningRect'],
-    },
-  },
-})
-
-const stateService = createActor(machine)
-// stateService.subscribe((state) => console.log(state.value))
+let scanRect = null
 
 let tray
 
-async function isGameInForeground() {
-  w = await activeWindows().getActiveWindow()
-  return w?.windowName === GAME_WINDOW_NAME
-}
-
-async function activateOnGame() {
-  const isActive = await isGameInForeground()
-  if (isActive) stateService.send({ type: 'ACTIVATE' })
-}
-
-async function searchForQRCode() {
-  const isActive = await isGameInForeground()
-  if (!isActive) {
-    stateService.send({ type: 'SUSPEND' })
-    return
-  }
-
+async function scan() {
+  let now
+  let result
+  if (DEBUG_LEVEL) now = performance.now()
   try {
-    const capture = await captureScreen()
-    let result, scanRect
-    try {
-      result = readQR(capture, {
-        detectFn: (points) => {
-          const display = screen.getDisplayNearestPoint(
-            screen.getCursorScreenPoint()
-          )
-          const m = 32
-          const f = display.scaleFactor
-          const x = Math.max(points[0].x - m, 0)
-          const y = Math.max(points[0].y - m, 0)
-          const w = points[1].x + m - x
-          const h = points[3].y + m - y
+    const capture = await captureScreen(scanRect)
 
-          scanRect = {
-            x: Math.floor(x / f),
-            y: Math.floor(y / f),
-            w: Math.ceil(w / f),
-            h: Math.ceil(h / f),
-          }
-        },
-      })
-    } catch (error) {
-      console.error(error)
-    }
-    if (result) {
-      stateService.send({
-        type: 'ACTIVATE',
-        payload: scanRect,
-      })
+    if (capture) {
+      result = readQR(capture, { detectFn: scanRect ? undefined : setScanRect })
+      if (result) handleMessage(result)
     }
   } catch (error) {
-    console.error(error)
-    stateService.send({ type: 'SUSPEND' })
+    if (error.message === 'Finder: len(found) = 0') {
+      scanRect = null
+    } else {
+      if (DEBUG_LEVEL) console.error(error.message)
+    }
+  }
+  if (!isPaused) setTimeout(scan, scanRect ? MAIN_INTERVAL : IDLE_INTERVAL)
+  if (DEBUG_LEVEL) {
+    console.log({ scanRect, result })
+    console.log(`scan: ${performance.now() - now}ms`)
   }
 }
 
-async function main(rect) {
-  // const now = performance.now()
-  try {
-    const capture = await captureScreen(rect)
-    let result
-    try {
-      result = readQR(capture)
-    } catch (error) {}
+function setScanRect(points) {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  const m = 32
+  const f = display.scaleFactor
+  const x = Math.max(points[0].x - m, 0)
+  const y = Math.max(points[0].y - m, 0)
+  const w = points[1].x + m - x
+  const h = points[3].y + m - y
 
-    if (result) {
-      handleMessage(result)
-    } else {
-      stateService.send({ type: 'SUSPEND' })
-    }
-    if (running) {
-      setImmediate(async () => await main(rect))
-    }
-  } catch {
-    stateService.send({ type: 'SUSPEND' })
+  scanRect = {
+    x: Math.floor(x / f),
+    y: Math.floor(y / f),
+    w: Math.ceil(w / f),
+    h: Math.ceil(h / f),
   }
-  // const elapsed = performance.now() - now
-  // console.log('Elapsed:', elapsed)
+}
+
+async function captureScreen(rect) {
+  const windows = Window.all()
+  const window = windows.find((w) => w.title === 'World of Warcraft')
+
+  if (!window) return null
+
+  let image = await window.captureImage()
+
+  if (rect) {
+    const scaleFactor = window.currentMonitor.scaleFactor
+    const cropped = await image.crop(
+      rect.x * scaleFactor,
+      rect.y * scaleFactor,
+      rect.w * scaleFactor,
+      rect.h * scaleFactor
+    )
+    return {
+      width: rect.w * scaleFactor,
+      height: rect.h * scaleFactor,
+      data: await cropped.toRaw(true),
+    }
+  } else {
+    return {
+      width: image.width,
+      height: image.height,
+      data: await image.toRaw(true),
+    }
+  }
 }
 
 function handleMessage(msg) {
+  if (DEBUG_LEVEL === 'debug') console.log({ msg })
   if (msg && msg !== 'noop') {
     const now = performance.now()
-    if (msg === lastMsg && now - lastMsgAt < 1000) return
+    if (msg === lastMsg && now - lastMsgAt < REPEAT_DELAY) return
+    if (DEBUG_LEVEL === 'info') console.log({ msg })
     lastMsgAt = now
     lastMsg = msg
     pressKey(getKeyCodeFor(msg))
@@ -222,7 +149,6 @@ app.whenReady().then(() => {
     {
       label: 'Quit',
       click: () => {
-        stateService.send({ type: 'STOP' })
         app.isQuiting = true
         app.quit()
       },
@@ -232,49 +158,20 @@ app.whenReady().then(() => {
   tray.setContextMenu(contextMenu)
 
   powerMonitor.on('suspend', () => {
-    stateService.send({ type: 'STOP' })
+    isPaused = true
   })
 
   powerMonitor.on('resume', () => {
-    stateService.send({ type: 'START' })
+    isPaused = false
+    scan()
   })
 
-  stateService.send({ type: 'START' })
+  if (isMacOS) checkForScreenAccess()
 
-  if (isMacOS) {
-    checkForScreenAccess()
-  }
+  scan()
 })
 
 if (require('electron-squirrel-startup')) {
-  stateService.send({ type: 'STOP' })
+  if (timer) clearInterval(timer)
   app.quit()
-}
-
-// TODO refactor pending loop to just look at this instead of activeWindows
-async function captureScreen(rect = null) {
-  const windows = Window.all()
-  const window = windows.find((w) => w.title === 'World of Warcraft')
-  let image = await window.captureImage()
-
-  if (rect) {
-    const scaleFactor = window.currentMonitor.scaleFactor
-    const cropped = await image.crop(
-      rect.x * scaleFactor,
-      rect.y * scaleFactor,
-      rect.w * scaleFactor,
-      rect.h * scaleFactor
-    )
-    return {
-      width: rect.w * scaleFactor,
-      height: rect.h * scaleFactor,
-      data: await cropped.toRaw(true),
-    }
-  } else {
-    return {
-      width: image.width,
-      height: image.height,
-      data: await image.toRaw(true),
-    }
-  }
 }

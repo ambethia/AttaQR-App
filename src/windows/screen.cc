@@ -52,7 +52,7 @@ void CaptureWorker::Execute()
 
 void CaptureWorker::OnOK()
 {
-  Napi::Buffer<uint8_t> data = Napi::Buffer<uint8_t>::New(
+  Napi::Buffer<uint8_t> data = Napi::Buffer<uint8_t>::NewOrCopy(
       Env(),
       buffer,
       bytesPerRow * height,
