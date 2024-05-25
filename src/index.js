@@ -24,11 +24,11 @@ const DEBUG_LEVEL = null
 // const DEBUG_LEVEL = 'info'
 // const DEBUG_LEVEL = 'debug'
 
-const isPaused = false
+let isPaused = false
 
 const IDLE_INTERVAL = 2500
-const MAIN_INTERVAL = 500
-const REPEAT_DELAY = 1000
+const MAIN_INTERVAL = 100
+const REPEAT_DELAY = 50
 
 const isMacOS = process.platform === 'darwin'
 
