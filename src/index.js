@@ -20,14 +20,14 @@ let readQR, Bitmap
   Bitmap = (await import('@paulmillr/qr')).Bitmap
 })()
 
-const DEBUG_LEVEL = null
-// const DEBUG_LEVEL = 'info'
-// const DEBUG_LEVEL = 'debug'
+let DEBUG_LEVEL = null
+// DEBUG_LEVEL = 'info'
+// DEBUG_LEVEL = 'debug'
 
 let isPaused = false
 
 const IDLE_INTERVAL = 2500
-const MAIN_INTERVAL = 100
+const MAIN_INTERVAL = 0
 const REPEAT_DELAY = 50
 
 const isMacOS = process.platform === 'darwin'
@@ -65,20 +65,18 @@ async function scan() {
   }
 }
 
-function setScanRect(points) {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
-  const m = 32
-  const f = display.scaleFactor
-  const x = Math.max(points[0].x - m, 0)
-  const y = Math.max(points[0].y - m, 0)
-  const w = points[1].x + m - x
-  const h = points[3].y + m - y
+function setScanRect(points, a, b, c) {
+  // const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  const x = points[0].x
+  const y = points[0].y
+  const w = Math.abs(points[2].x - x)
+  const h = Math.abs(points[2].y - y)
 
   scanRect = {
-    x: Math.floor(x / f),
-    y: Math.floor(y / f),
-    w: Math.ceil(w / f),
-    h: Math.ceil(h / f),
+    x: Math.floor(x - w/4),
+    y: Math.floor(y - h/4),
+    w: Math.ceil(w*1.5),
+    h: Math.ceil(h*1.5),
   }
 }
 
@@ -98,12 +96,18 @@ async function captureScreen(rect) {
       rect.w * scaleFactor,
       rect.h * scaleFactor
     )
+    if (DEBUG_LEVEL) {
+      fs.writeFileSync(`cropped.jpeg`, cropped.toJpegSync());
+    }
     return {
       width: rect.w * scaleFactor,
       height: rect.h * scaleFactor,
       data: await cropped.toRaw(true),
     }
   } else {
+    if (DEBUG_LEVEL) {
+      fs.writeFileSync(`image.jpeg`, image.toJpegSync());
+    }
     return {
       width: image.width,
       height: image.height,
@@ -172,6 +176,5 @@ app.whenReady().then(() => {
 })
 
 if (require('electron-squirrel-startup')) {
-  if (timer) clearInterval(timer)
   app.quit()
 }
