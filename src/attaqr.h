@@ -4,34 +4,28 @@
 
 #if !defined(IS_MACOS) && defined(__MACH__)
 #define IS_MACOS
+#include <CoreGraphics/CoreGraphics.h>
+static const int MOD_ALT = kCGEventFlagMaskAlternate;
+static const int MOD_CONTROL = kCGEventFlagMaskControl;
+static const int MOD_SHIFT = kCGEventFlagMaskShift;
 #endif
 
 #if !defined(IS_WINDOWS) && defined(_WIN32)
 #define IS_WINDOWS
+#include <Windows.h>
 #endif
 
-typedef struct _AQPoint
+static const int MOD_NONE = 0;
+
+typedef struct _AQPixel
 {
-  size_t x;
-  size_t y;
-} AQPoint;
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+} AQPixel;
 
-AQPoint AQMakePoint(size_t x, size_t y);
+AQPixel getPixel(size_t x, size_t y);
 
-typedef struct _AQSize
-{
-  size_t height;
-  size_t width;
-} AQSize;
-
-AQSize AQMakeSize(size_t height, size_t width);
-
-typedef struct _AQRect
-{
-  AQPoint origin;
-  AQSize size;
-} AQRect;
-
-AQRect AQMakeRect(size_t x, size_t y, size_t h, size_t w);
+void pressKey(int key, int flags);
 
 #endif // ATTAQR_H

@@ -9,7 +9,7 @@
             "cflags_cc!": ["-fno-exceptions"],
             "conditions": [
                 ['OS=="mac"', {
-                    "sources": ["src/macos/keyboard.cc", "src/macos/screen.cc"],
+                    "sources": ["src/macos.cc"],
                     'cflags+': ['-fvisibility=hidden'],
                     "xcode_settings": {
                         "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
@@ -17,7 +17,7 @@
                     }
                 }],
                 ['OS=="win"', {
-                    "sources": ["src/windows/keyboard.cc", "src/windows/screen.cc"],
+                    "sources": ["src/windows.cc"],
                     "msvs_settings": {
                         "VCCLCompilerTool": {"ExceptionHandling": 1},
                     }

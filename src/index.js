@@ -1,131 +1,96 @@
-const path = require('path')
-const fs = require('fs')
-const {
+import path from 'path'
+import { fileURLToPath } from 'url'
+import {
   app,
   Menu,
   nativeImage,
   Notification,
   powerMonitor,
-  screen,
   systemPreferences,
   Tray,
-} = require('electron')
-const { pressKey } = require('bindings')('attaqr')
-const { getKeyCodeFor } = require('./keys')
-const { Window } = require('node-screenshots')
+} from 'electron'
+import { activeWindow } from 'get-windows'
+import bindings from 'bindings'
+import { getKeyCodeFor } from './keys.js'
+import squirrelStartup from 'electron-squirrel-startup'
+const { pressKey, getPixel } = bindings('attaqr')
 
-let readQR, Bitmap
-;(async () => {
-  readQR = (await import('@paulmillr/qr/decode.js')).default
-  Bitmap = (await import('@paulmillr/qr')).Bitmap
-})()
-
-let DEBUG_LEVEL = null
-// DEBUG_LEVEL = 'info'
-// DEBUG_LEVEL = 'debug'
+let DEBUG = false
+// DEBUG = true
 
 let isPaused = false
 
 const IDLE_INTERVAL = 2500
 const MAIN_INTERVAL = 0
-const REPEAT_DELAY = 50
+const REPEAT_DELAY = 500
 
 const isMacOS = process.platform === 'darwin'
 
 if (isMacOS) app.dock.hide()
 
-let lastMsg = null
-let lastMsgAt = Date.now()
-let scanRect = null
+let lastKey = null
+let lastKeyAt = Date.now()
 
 let tray
 
-async function scan() {
-  let now
-  let result
-  if (DEBUG_LEVEL) now = performance.now()
-  try {
-    const capture = await captureScreen(scanRect)
+let coord = null
+let pixel = null
+let perf = null
 
-    if (capture) {
-      result = readQR(capture, { detectFn: scanRect ? undefined : setScanRect })
-      if (result) handleMessage(result)
+async function scan() {
+  let now = performance.now()
+  try {
+    if (coord) {
+      pixel = getPixel(coord.x, coord.y)
+
+      if (pixel.r == 255) {
+        const [key, code] = getKeyCodeFor(Math.round(pixel.b / 4) * 4)
+        if (code) {
+          if (key === lastKey && now - lastKeyAt < REPEAT_DELAY) {
+            // wait
+          } else {
+            lastKeyAt = now
+            lastKey = key
+            pressKey(code)
+          }
+        }
+      }
     }
   } catch (error) {
-    if (error.message === 'Finder: len(found) = 0') {
-      scanRect = null
-    } else {
-      if (DEBUG_LEVEL) console.error(error.message)
-    }
+    if (DEBUG) console.error(error.message)
   }
-  if (!isPaused) setTimeout(scan, scanRect ? MAIN_INTERVAL : IDLE_INTERVAL)
-  if (DEBUG_LEVEL) {
-    console.log({ scanRect, result })
-    console.log(`scan: ${performance.now() - now}ms`)
-  }
+  perf = performance.now() - now
+  if (!isPaused) setTimeout(scan, coord ? MAIN_INTERVAL : IDLE_INTERVAL)
 }
 
-function setScanRect(points, a, b, c) {
-  // const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
-  const x = points[0].x
-  const y = points[0].y
-  const w = Math.abs(points[2].x - x)
-  const h = Math.abs(points[2].y - y)
-
-  scanRect = {
-    x: Math.floor(x - w/4),
-    y: Math.floor(y - h/4),
-    w: Math.ceil(w*1.5),
-    h: Math.ceil(h*1.5),
-  }
-}
-
-async function captureScreen(rect) {
-  const windows = Window.all()
-  const window = windows.find((w) => w.title === 'World of Warcraft')
-
-  if (!window) return null
-
-  let image = await window.captureImage()
-
-  if (rect) {
-    const scaleFactor = window.currentMonitor.scaleFactor
-    const cropped = await image.crop(
-      rect.x * scaleFactor,
-      rect.y * scaleFactor,
-      rect.w * scaleFactor,
-      rect.h * scaleFactor
-    )
-    if (DEBUG_LEVEL) {
-      fs.writeFileSync(`cropped.jpeg`, cropped.toJpegSync());
+async function findPixel() {
+  const result = await activeWindow({ screenRecordingPermission: true })
+  if (result?.title == 'World of Warcraft') {
+    const { x, y } = result.bounds
+    let yOffset = 0
+    let xOffset = 0
+    if (isMacOS && y > 0) {
+      yOffset = 30 // menu bar (needs to be dynamic?)
+      xOffset = 2 // window shadow
     }
-    return {
-      width: rect.w * scaleFactor,
-      height: rect.h * scaleFactor,
-      data: await cropped.toRaw(true),
-    }
+    coord = { x: x + xOffset, y: y + yOffset }
   } else {
-    if (DEBUG_LEVEL) {
-      fs.writeFileSync(`image.jpeg`, image.toJpegSync());
-    }
-    return {
-      width: image.width,
-      height: image.height,
-      data: await image.toRaw(true),
-    }
+    coord = null
   }
+  if (!isPaused) setTimeout(findPixel, IDLE_INTERVAL)
 }
 
-function handleMessage(msg) {
-  if (DEBUG_LEVEL === 'debug') console.log({ msg })
-  if (msg && msg !== 'noop') {
-    const now = performance.now()
-    if (msg === lastMsg && now - lastMsgAt < REPEAT_DELAY) return
-    if (DEBUG_LEVEL === 'info') console.log({ msg })
-    lastMsgAt = now
-    lastMsg = msg
-    pressKey(getKeyCodeFor(msg))
+function updateConsole() {
+  console.clear()
+  if (coord) {
+    console.log(`World of Warcraft! (${coord.x}, ${coord.y})`)
+    if (pixel) {
+      console.log(
+        `${lastKey} (${pixel.r},${pixel.g},${pixel.b}) ${perf.toFixed(2)}ms`
+      )
+    }
   }
+  if (!isPaused) setTimeout(updateConsole, REPEAT_DELAY)
 }
 
 function checkForScreenAccess() {
@@ -143,7 +108,7 @@ function checkForScreenAccess() {
 app.whenReady().then(() => {
   const image = nativeImage.createFromPath(
     path.resolve(
-      __dirname,
+      path.dirname(fileURLToPath(import.meta.url)),
       isMacOS ? '../res/trayTemplate.png' : '../res/icon.png'
     )
   )
@@ -172,9 +137,11 @@ app.whenReady().then(() => {
 
   if (isMacOS) checkForScreenAccess()
 
+  findPixel()
   scan()
+  if (DEBUG) updateConsole()
 })
 
-if (require('electron-squirrel-startup')) {
+if (squirrelStartup) {
   app.quit()
 }

@@ -1,51 +1,38 @@
 #include <napi.h>
 #include "attaqr.h"
-#include "keyboard.h"
-#include "screen.h"
 
-AQPoint AQMakePoint(size_t x, size_t y)
+AQPixel AQMakePixel(uint8_t r, uint8_t g, uint8_t b)
 {
-  AQPoint point;
-  point.x = x;
-  point.y = y;
-  return point;
+  AQPixel pixel;
+  pixel.r = r;
+  pixel.g = g;
+  pixel.b = b;
+  return pixel;
 };
 
-AQSize AQMakeSize(size_t height, size_t width)
+Napi::Value _getPixel(const Napi::CallbackInfo &info)
 {
-  AQSize size;
-  size.height = height;
-  size.width = width;
-  return size;
-};
-
-AQRect AQMakeRect(size_t x, size_t y, size_t h, size_t w)
-{
-  AQRect rect;
-  rect.origin = AQMakePoint(x, y);
-  rect.size = AQMakeSize(h, w);
-  return rect;
-};
-
-void _captureScreen(const Napi::CallbackInfo &info)
-{
-  CaptureWorker *worker;
-  if (info.Length() == 1)
+  Napi::Env env = info.Env();
+  if (info.Length() == 2)
   {
-    Napi::Function cb = info[0].As<Napi::Function>();
-    worker = new CaptureWorker(cb);
+    size_t x = info[0].As<Napi::Number>().Int32Value();
+    size_t y = info[1].As<Napi::Number>().Int32Value();
+
+    AQPixel pixel = getPixel(x, y);
+
+    Napi::Object obj = Napi::Object::New(env);
+    obj.Set(Napi::String::New(env, "r"), Napi::Number::New(env, pixel.r));
+    obj.Set(Napi::String::New(env, "g"), Napi::Number::New(env, pixel.g));
+    obj.Set(Napi::String::New(env, "b"), Napi::Number::New(env, pixel.b));
+
+    // Return our object with .width and .height.
+    return obj;
   }
   else
   {
-    AQRect rect = AQMakeRect(
-        (uint32_t)info[0].As<Napi::Number>(),
-        (uint32_t)info[1].As<Napi::Number>(),
-        (uint32_t)info[2].As<Napi::Number>(),
-        (uint32_t)info[3].As<Napi::Number>());
-    Napi::Function cb = info[4].As<Napi::Function>();
-    worker = new CaptureWorker(rect, cb);
+    Napi::TypeError::New(env, "Expected 2 arguments").ThrowAsJavaScriptException();
+    return env.Null();
   }
-  worker->Queue();
 }
 
 void _pressKey(const Napi::CallbackInfo &info)
@@ -78,7 +65,7 @@ void _pressKey(const Napi::CallbackInfo &info)
 
 Napi::Object InitAll(Napi::Env env, Napi::Object exports)
 {
-  exports.Set("captureScreen", Napi::Function::New(env, _captureScreen));
+  exports.Set("getPixel", Napi::Function::New(env, _getPixel));
   exports.Set("pressKey", Napi::Function::New(env, _pressKey));
   return exports;
 }
