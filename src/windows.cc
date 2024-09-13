@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include "keyboard.h"
+#include "attaqr.h"
 
 void pressKey(int key, int flags)
 {
@@ -10,4 +10,13 @@ void pressKey(int key, int flags)
   SendInput(1, &input, sizeof(INPUT));
   input.ki.dwFlags = KEYEVENTF_KEYUP;
   SendInput(1, &input, sizeof(INPUT));
+}
+
+AQPixel getPixel(size_t x, size_t y)
+{
+  HDC dc = GetDC(NULL);
+  COLORREF cr = GetPixel(dc, x, y);
+  ReleaseDC(NULL, dc);
+  AQPixel pixel{GetRValue(cr), GetGValue(cr), GetBValue(cr)};
+  return pixel;
 }

@@ -16,7 +16,7 @@ import squirrelStartup from 'electron-squirrel-startup'
 const { pressKey, getPixel } = bindings('attaqr')
 
 let DEBUG = false
-// DEBUG = true
+DEBUG = true
 
 let isPaused = false
 
@@ -69,9 +69,9 @@ async function findPixel() {
     const { x, y } = result.bounds
     let yOffset = 0
     let xOffset = 0
-    if (isMacOS && y > 0) {
-      yOffset = 30 // menu bar (needs to be dynamic?)
-      xOffset = 2 // window shadow
+    if (y > 0) {
+      yOffset = isMacOS ? 30 : 49 // menu bar (needs to be dynamic?)
+      xOffset = isMacOS ? 2 : 14 // window shadow
     }
     coord = { x: x + xOffset, y: y + yOffset }
   } else {

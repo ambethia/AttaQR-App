@@ -1,6 +1,7 @@
 #pragma once
 #ifndef ATTAQR_H
 #define ATTAQR_H
+#include <cstdint>
 
 #if !defined(IS_MACOS) && defined(__MACH__)
 #define IS_MACOS
