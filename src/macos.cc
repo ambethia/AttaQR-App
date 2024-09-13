@@ -1,7 +1,7 @@
 #include <CoreGraphics/CoreGraphics.h>
 #include "attaqr.h"
 
-void pressKey(int key, int flags)
+void pressKey(int key, int mod)
 {
   CGEventRef evt = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)key, kCGEventKeyDown);
   CGEventSetFlags(evt, flags);

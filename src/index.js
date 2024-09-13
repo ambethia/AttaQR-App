@@ -44,14 +44,29 @@ async function scan() {
       pixel = getPixel(coord.x, coord.y)
 
       if (pixel.r == 255) {
-        const [key, code] = getKeyCodeFor(Math.round(pixel.b / 4) * 4)
+        const g = Math.round(pixel.g / 4) * 4
+        const b = Math.round(pixel.b / 4) * 4
+        const [key, code] = getKeyCodeFor(b)
+        let mod = ''
+
+        switch (g) {
+          case 4: mod = 'shift'
+            break
+          case 8: mod = 'ctrl'
+            break
+          case 12: mod = 'alt'
+          default:
+            break
+        }
+        const binding = [mod, key].join('-')
+
         if (code) {
-          if (key === lastKey && now - lastKeyAt < REPEAT_DELAY) {
+          if (binding === lastKey && now - lastKeyAt < REPEAT_DELAY) {
             // wait
           } else {
             lastKeyAt = now
-            lastKey = key
-            pressKey(code)
+            lastKey = binding
+            pressKey(code, [mod])
           }
         }
       }

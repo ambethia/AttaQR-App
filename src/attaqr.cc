@@ -48,16 +48,19 @@ void _pressKey(const Napi::CallbackInfo &info)
       std::string modString = modList.Get(i).As<Napi::String>();
       if (modString.compare("alt") == 0)
       {
-        flags |= MOD_ALT;
+        flags |= KEY_ALT;
       }
       else if (modString.compare("shift") == 0)
       {
-        flags |= MOD_SHIFT;
+        flags |= KEY_SHIFT;
       }
-      else if (modString.compare("control") == 0)
+      else if (modString.compare("ctrl") == 0)
       {
-        flags |= MOD_CONTROL;
+        flags |= KEY_CONTROL;
       }
+      Napi::Env env = info.Env();
+      Napi::Function consoleLog = env.Global().Get("console").As<Napi::Object>().Get("log").As<Napi::Function>();
+      consoleLog.Call({ Napi::String::New(env, modString), Napi::Number::New(env, flags) });
     }
   }
   pressKey(key, flags);
