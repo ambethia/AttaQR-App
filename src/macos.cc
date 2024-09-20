@@ -4,7 +4,7 @@
 void pressKey(int key, int mod)
 {
   CGEventRef evt = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)key, kCGEventKeyDown);
-  CGEventSetFlags(evt, flags);
+  CGEventSetFlags(evt, mod);
   CGEventPost(kCGHIDEventTap, evt);
   CGEventSetType(evt, kCGEventKeyUp);
   CGEventPost(kCGHIDEventTap, evt);

@@ -3,6 +3,7 @@
   "productName": "attaqr",
   "version": "3.0.0",
   "description": "Combat Assistant",
+  "author": "Jason",
   "repository": "https://github.com/ambethia/attaqr",
   "main": "src/index.js",
   "type": "module",

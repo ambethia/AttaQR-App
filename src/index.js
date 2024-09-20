@@ -16,7 +16,7 @@ import squirrelStartup from 'electron-squirrel-startup'
 const { pressKey, getPixel } = bindings('attaqr')
 
 let DEBUG = false
-DEBUG = true
+// DEBUG = true
 
 let isPaused = false
 

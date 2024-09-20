@@ -38,7 +38,7 @@ Napi::Value _getPixel(const Napi::CallbackInfo &info)
 void _pressKey(const Napi::CallbackInfo &info)
 {
   Napi::Number key = info[0].As<Napi::Number>();
-  int flags = MOD_NONE;
+  int mod = MOD_NONE;
 
   if (info.Length() == 2 && info[1].IsArray())
   {
@@ -48,22 +48,19 @@ void _pressKey(const Napi::CallbackInfo &info)
       std::string modString = modList.Get(i).As<Napi::String>();
       if (modString.compare("alt") == 0)
       {
-        flags |= KEY_ALT;
+        mod = KEY_ALT;
       }
       else if (modString.compare("shift") == 0)
       {
-        flags |= KEY_SHIFT;
+        mod = KEY_SHIFT;
       }
       else if (modString.compare("ctrl") == 0)
       {
-        flags |= KEY_CONTROL;
+        mod = KEY_CONTROL;
       }
-      Napi::Env env = info.Env();
-      Napi::Function consoleLog = env.Global().Get("console").As<Napi::Object>().Get("log").As<Napi::Function>();
-      consoleLog.Call({ Napi::String::New(env, modString), Napi::Number::New(env, flags) });
     }
   }
-  pressKey(key, flags);
+  pressKey(key, mod);
 }
 
 Napi::Object InitAll(Napi::Env env, Napi::Object exports)
