@@ -5,7 +5,6 @@ import {
   Menu,
   nativeImage,
   Notification,
-  powerMonitor,
   systemPreferences,
   Tray,
 } from 'electron'
@@ -140,15 +139,6 @@ app.whenReady().then(() => {
   ])
   tray.setToolTip('AttaQR')
   tray.setContextMenu(contextMenu)
-
-  powerMonitor.on('suspend', () => {
-    isPaused = true
-  })
-
-  powerMonitor.on('resume', () => {
-    isPaused = false
-    scan()
-  })
 
   if (isMacOS) checkForScreenAccess()
 
